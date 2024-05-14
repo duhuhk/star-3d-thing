@@ -1,0 +1,1483 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>at long bloody last</title>
+	<style>
+		body{
+			background-color: rgb(60,60,60);
+		}
+		#render{
+			outline: 2px solid white;
+			float: left;
+			background-color: rgb(15,15,15);
+		}
+		
+		.dev-button-active{
+			background: none;
+			outline: none;
+			border: none;
+			width: 100%;
+			background-color: rgba(255,255,255,0.05);
+			color: white;
+			vertical-align: middle;
+			width: 100%;
+		}
+		.dev-button-active:hover{
+			background-color: rgba(255,255,255,0.15);
+		}
+		
+		/* ui menus */
+		#ui{
+			outline: 2px solid white;
+			float: left;
+			margin-left: 1em;
+			background-color: rgb(30,30,30);
+			padding: 0.5em;
+			color: white;
+		}
+		#ui-split-earth{
+			
+		}
+		#ui-split-stars{
+			
+		}
+		#ui-split-dev{
+			
+		}
+		/* ui split menus (for vertical columns in menu) */
+		.ui-split-menu{
+			min-height: 100%;
+		}
+		.ui-split-l{
+			float: left;
+			border-right: 2px solid white;
+			padding-right: 0.5em; 
+			margin-right: -1px;
+		}
+		.ui-split-m{
+			float: left;
+			border-left: 2px solid white;
+			margin-left: -1px; 
+			padding-left: 0.5em;
+			border-right: 2px solid white;
+			padding-right: 0.5em; 
+			margin-right: -0.5px;
+		}
+		.ui-split-r{
+			float: right;
+			border-left: 2px solid white;
+			margin-left: -1px; 
+			padding-left: 0.5em;
+		}
+		/* ui elements */
+		.ui-title{
+			margin-top: 0;
+			margin-bottom: 0;
+			font-weight: bold;
+		}
+		.angle-input-label{
+			font-weight: bold;
+		}
+		#new-track-button{
+			color: grey;
+			margin-top: 0;
+			margin-bottom: 0;
+		}
+		#compass-panel{
+			text-align: center; 
+			margin: 0; 
+			padding-top: 0.2em; 
+			padding-bottom: 0.2em;
+		}
+	</style>
+</head>
+<body>
+	<canvas id="render" width="600" height="600"></canvas>
+	<div id="ui">
+		<div id="ui-split-earth" class="ui-split-menu">
+			<label id="display-lati" for="lati" class="angle-input-label"></label>
+			<br />
+			<input type="range" min="-90" max="90" id="input-lati" name="lati">
+			<br />
+			<label id="display-long" for="long" class="angle-input-label">Longitude: </label>
+			<br />
+			<input type="range" min="-180" max="180" id="input-long" name="long">
+			<hr />
+			<div id="legend">
+				<p class="ui-title" id="legend-title">Map Orientation Lines</p>
+				<p id="legend-zenith" data-ui-type="legend" style="color: chartreuse;">― • ― • Zenith</p>
+				<p id="legend-horizon" data-ui-type="legend" style="color: lightgreen;">― • ― • Horizon</p>
+				<p id="legend-pole" data-ui-type="legend" style="color: aqua;">― • ― • N. Celest. Pole</p>
+				<p id="legend-equator" data-ui-type="legend" style="color: blue;">― • ― • Equator</p>
+			</div>
+			<hr />
+			<div id="compass-panel">
+				<p class="ui-title" id="compass-title" style="text-align: left;">Equator Rotation</p>
+				<canvas id="compass-canvas" width="50" height="50" style="margin: 0;"></canvas>
+			</div>
+		</div>
+		<div id="ui-split-stars" class="ui-split-menu">
+			<p class="ui-title" id="star-list-title">Tracked Objects</p>
+			<div id="star-list">	</div>
+			<hr />
+			<p id="new-object-button" title="to be implemented"><i><s>Add a new object</s></i></p>
+		</div>
+		<!-- <div id="ui-split-test-spacing" class="ui-split-menu">
+			<p class="ui-title">test split title</p>
+			<div><p>test split contents</p></div>
+		</div> -->
+		<div id="ui-split-dev" class="ui-split-menu">
+			<p class="ui-title" id="dev-menu-title">Dev Stuff</p>
+			<button class="dev-button-active" id="init-render-button" data-command='[null, "init", [{}]]'>init()</button> <br />
+			<button class="dev-button-active" id="end-render-button" data-command='[null, "kill", null]'>kill()</button> <br />
+			<button class="dev-button-active" data-command='["R", "cfgTog", ["scaleCelestialSphere"]]'>R.cfgTog`scaleCelestialSphere`</button> <br />
+			<button class="dev-button-active" data-command='[null, "autoPopStars", null]'>pop renderList</button> <br />
+			<button class="dev-button-active" data-command='["renderList", "cull", null]'>cull renderList</button> <br />
+			<hr />
+			<div id="dev-menu-panel">
+				<div id="settings-ui">
+					<p class="ui-title">Settings</p>
+				</div>
+				<hr />
+				<div id="extra-info-panel">
+					<p class="ui-title" id="extra-info-title">Extra Info</p>
+					<span id="extra-info-here">...</span>
+				</div>
+			</div>
+		</div>
+	</div>
+	
+	<script id="js-html">
+		// canvas
+		const cvs = document.getElementById('render');
+		const cvsCompass = document.getElementById('compass-canvas');
+		
+		// ui
+		const latiLabel = document.getElementById('display-lati');
+		const userLatitudeAngle = document.getElementById('input-lati');
+		const longLabel = document.getElementById('display-long');
+		const userLongitudeAngle = document.getElementById('input-long');
+		const starList = document.getElementById('star-list');
+		const extraInfoBody = document.getElementById('extra-info-here');
+		
+		// for handling the "extra info" spot
+		function qlog(...msg){
+			let print = String(msg[0]);
+			for(let i in msg){
+				if(i == 0) continue;
+				print += '<br />' + String(msg[i]);
+			}
+			extraInfoBody.innerHTML = print;
+		}
+		
+		// detecting and using legend hover
+		var legendBoldLines = {};	// eh. itll autofill.
+		function giveUIHoverBackground(leg){
+			leg.addEventListener("mouseover",() => {
+				leg.style.fontWeight="bold";
+				leg.style.background = "radial-gradient(circle, rgba(90,90,90,0.3) 0%, " +
+					"rgba(90,90,90,0.3) 85%, rgba(0,0,0,0) 100%)"
+				
+				switch(leg.getAttribute('data-ui-type')){
+					case 'legend':
+						legendBoldLines[leg.id.split('-')[1]] = true;
+						break;
+					case 'star-entry':
+						starLineData[Number(leg.getAttribute('data-index'))] = 1;
+						break;
+				}
+			});
+			leg.addEventListener("mouseout",() => {
+				leg.style.fontWeight="normal";
+				leg.style.background = "rgba(0,0,0,0)";
+				
+				switch(leg.getAttribute('data-ui-type')){
+					case 'legend':
+						legendBoldLines[leg.id.split('-')[1]] = false;
+						break;
+					case 'star-entry':
+						starLineData[Number(leg.getAttribute('data-index'))] = 0;
+						break;
+				}
+			}); 
+		}
+		// ... apply to coordinate axes
+		giveUIHoverBackground(document.getElementById('legend-zenith'));
+		giveUIHoverBackground(document.getElementById('legend-horizon'));
+		giveUIHoverBackground(document.getElementById('legend-pole'));
+		giveUIHoverBackground(document.getElementById('legend-equator'));
+		
+		// detect user input for changing position
+		var isChangingLatitude = false;
+		var isChangingLongitude = false;
+		function updateLatitudeAngle(){
+			let A = convert([Number(userLatitudeAngle.value)], 'to', 'rad');
+			R.latitude = A;
+			latiLabel.innerHTML = "Latitude: " + userLatitudeAngle.value + "°";
+		}
+		function updateLongitudeAngle(){
+			let A = convert([Number(userLongitudeAngle.value)], 'to', 'rad');
+			R.longitude = A;
+			longLabel.innerHTML = "Longitude: " + userLongitudeAngle.value + "°";
+		}
+		// ... apply to latitude/longitude bars
+		userLatitudeAngle.addEventListener("change", updateLatitudeAngle);
+		userLatitudeAngle.addEventListener("mousedown", () => {isChangingLatitude = true;});
+		userLatitudeAngle.addEventListener("mouseup", () => {isChangingLatitude = false;});
+		userLongitudeAngle.addEventListener("change", updateLongitudeAngle);
+		userLongitudeAngle.addEventListener("mousedown", () => {isChangingLongitude = true;});
+		userLongitudeAngle.addEventListener("mouseup", () => {isChangingLongitude = false;});
+		
+		// make ui splits cooperate (categorise into left / middles / right)
+		// could do manually but that would need to be hard-coded into the html
+		function deriveUISplitMenuPositions(){
+			// determine .ui-split-menus to be given what position
+			let uiSplitM = Array.from(document.querySelectorAll('.ui-split-menu'));
+			let uiSplitL = uiSplitM.shift();		// get first (lefternmost) .ui-split-menu
+			let uiSplitR = uiSplitM.pop();		// get last (righternmost) .ui-split-menu
+			
+			// assign class to give position
+			uiSplitL.classList.add('ui-split-l');
+			uiSplitM.forEach(node => node.classList.add('ui-split-m'));
+			uiSplitR.classList.add('ui-split-r');
+		};
+		
+		// make dev settings buttons work
+		function armDevButtons(){
+			let devBtn = Array.from(document.querySelectorAll('.dev-button-active'));
+			devBtn.forEach(btn => {
+				let fnData = JSON.parse(btn.getAttribute('data-command'));
+				let parent = window;
+				if(fnData[0] !== null){
+					let path = fnData[0].split('.');
+					path.forEach(dir => {if(dir != '') parent = parent[dir]});
+				}
+				let fn = parent[fnData[1]];
+				let args = fnData[2] != null ? fnData[2] : null;
+				
+				let outArgs = JSON.stringify(`${args}`).split('\"')[1];
+				btn.addEventListener('click', () => {
+					if(args){(fn)(...args);}
+					else{(fn)();}
+					qlog(`${fn.name}()'ed`);
+					console.log(`Ran fn ${fn}(${outArgs})`);
+				});
+			});
+		}
+	</script>
+	<script id="js-math-tools">
+		// general math stuff
+		const pi = Math.PI;
+		const pi_ = 0.5 * pi;
+		const pi2 = 2 * pi;
+		const sqrt2 = Math.sqrt(2);
+		
+		// fix angle-related issues
+		function clampAng(A, bounds = [0, pi2]){
+			while(A < bounds[0]) A += pi2;
+			while(A > bounds[1]) A -= pi2;
+			return A;
+		}
+		// for when i forget its name
+		function clampAngle(A, bounds = [0, pi2]){
+			return clampAng(A, bounds);
+		}
+		
+		// convert different units
+		// pre-compute conversion multiples/quotients for decimal accuracy and fn speed
+		const conversionConstants = {
+			dg: 1,							// degree
+			am: 1/60,						// arcminute
+			as: (1/60)/60,					// arcsecond
+			hr: 15,							// hour
+			mn: 15 * (1 / 60),			// minute
+			sc: 15 * ((1 / 60) / 60),	// second
+		};
+		function convert(inp, direction, type, deg = false){
+			let outDeg;
+			// let _i = ([0, 0, 0]).forEach((l, i, a) => a[i] = inp[i] ? inp[i] : 0);
+			let _i;
+			if(Array.isArray(inp)){
+				_i = (()=>{let r=[0,0,0];r.forEach((l,i)=>r[i]=inp[i]?inp[i]:0);return r})();
+			}else{
+				_i = [inp, 0, 0];
+			}
+			let _c = conversionConstants;
+			switch(type){
+				case "hour-minute-second":
+				case "hms":
+					if(direction == 'to'){
+					
+					}else if(direction == 'from'){
+						outDeg = _c.hr * _i[0] + _c.mn * _i[1] + _c.sc * _i[2];
+					}
+					break;
+				case "degree-arcminute-arcsecond":
+				case "damas":
+					if(direction == 'to'){
+					
+					}else if(direction == 'from'){
+						outDeg = _c.dg * _i[0] + _c.am * _i[1] + _c.as * _i[2];
+					}
+					break;
+				case "radians":
+				case "rad":
+					if(direction == 'to'){
+						outDeg = _i[0];
+					}else if(direction == "from"){
+						deg = true;
+						outDeg = 180 * _i[0] / pi;
+					}
+					break;
+			}
+			
+			return deg ? outDeg : outDeg * pi / 180;
+		}
+		
+		// convert vectors from array/json (ideally, all vecs would have the same structure - fix this!)
+		function vects(v, enforceType = false){	// "vector type swap"
+			if(arguments.length == 1){
+				return Array.isArray(v) ? {X: v[0], Y: v[1], Z: v[2]} : [v.X, v.Y, v.Z];
+			}
+			return [...arguments].map(u => vects(u));
+			/*	old method
+			let V = [...arguments];
+			// let U = []; for(let i in V) U.push(vects(V[i]));	// make outp. arr. of vecs
+			let U = V.map(u => vects(u));
+			return U;
+			*/
+		}
+		// force to to certain format (lazy, dont use in final build!)
+		// ^ (only change if wants other format)
+		function vectsDiode(v, enforceType){
+			let isTypeArray = ['a', 'arr', 'array'];
+			return Array.isArray(v) ^ isTypeArray.includes(enforceType) ? vects(v) : v;
+			/* arr ^ arr -> v
+				arr ^ obj -> vects(v)
+				obj ^ obj -> v
+				obj ^ arr -> vects(v) */
+		}
+		
+		// 3D projection onto 2D
+		// IMPRTNT: scalar needed bc z points shifted back by R.r$ - ALL points considered farther back than truth!
+		// ^ this must be fixed to account for the fn not giving full length projections
+		// see the initialisation part
+		function project2D(e, z, r, dScale = R.proj.ds){
+			// _ * d / z		   | d is dist. from eye to some window
+			// _ * d / (d +- z)	| d is some 'light source'
+			
+			let d = r * dScale;
+			let E = e * d / (d - z + r);
+			// let E = e * d / (d + z + r);
+			
+			if(!R.cfg`scaleCelestialSphere`) E *= R.proj.cs;
+			// E *= R.proj.cs;
+			
+			return E;
+		}
+		
+		// unused - remove later - will this be useful for more controlled spinning?
+		// take spherical coordinates to cartesian
+		function sphereToCart(r, a0, a1){
+			// a0 is horizontal plane
+			// a1 is vertical plane
+			
+			let [c0, s0] = [Math.cos(a0), Math.sin(a0)];
+			let [c1, s1] = [Math.cos(a1), Math.sin(a1)];
+			
+			return {
+				X: r * c1 * s0,
+				Y: r * -s1,
+				Z: r * c1 * c0
+			};
+		}
+		
+		// cross product (for tangent to 2 vectors)
+		function crossP(A, B){
+			return [
+				A[1] * B[2] - A[2] * B[1],
+				A[0] * B[2] - A[2] * B[0],
+				A[0] * B[1] - A[1] * B[0]
+			];
+		}
+		// normalise
+		function norm(v){
+			let u = 1 / Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+			return v.map(e => e * u);
+		}
+		
+		// revolve points around an arbitrary axis
+		function glennRevMaster(_R, _O, _D, theta){
+			// rotate _R = (x,y,z) about line through _O = (a,b,c) with dir vec _D = <u,v,w> by angle θ
+			let {X: x, Y: y, Z: z} = _R;
+			let {X: a, Y: b, Z: c} = _O;
+			let [u, v, w] = _D;
+			
+			// if(debug_current_star.index == 0) console.log(_R, _O, _D, theta);
+			
+			let u2 = u * u,
+				v2 = v * v,
+				w2 = w * w;
+			let au = a * u,
+				bv = b * v,
+				cw = c * w;
+			let ux = u * x,
+				vy = v * y,
+				wz = w * z;
+			let Ct = Math.cos(theta),
+				St = Math.sin(theta);
+			
+			return {
+				X: (a*(v2 + w2) - u*(bv + cw - ux - vy - wz))*(1 - Ct) + x*Ct + (-c*v + b*w - w*y + v*z)*St,
+				Y: (b*(u2 + w2) - v*(au + cw - ux - vy - wz))*(1 - Ct) + y*Ct + (c*u + a*w - w*x + u*z)*St,
+				Z: (c*(u2 + v2) - w*(au + bv - ux - vy - wz))*(1 - Ct) + z*Ct + (-b*u + a*v - v*x + u*y)*St,
+			};
+		}
+		
+		// get points to appear correctly around the NCP
+		function NCP3D(alpha, delta, r = R.r$, includeProjection = true){
+			// alpha *= -1;
+			let lam = R.longitude;
+			let phi = R.latitude;
+			
+			let _P = R.NCP;		// un-normalised NCP axis vector
+			let uP = R.NCP.u;		// normalised NCP axis vector
+			
+			/**************************************************\
+			*																	*
+			*	instead of Glenn reving the point up to NCP,		*
+			*	use that NCP is always parallel to  XZ-plane		*
+			*	to calculate an initial R								*
+			*																	*
+			*	this also has the effect of skipping the 			*
+			*	r_initial step												*
+			*																	*
+			\**************************************************/
+			
+			//  a0 = angNCP - angRay
+			//		 = (pi - phi) - (pi_ - delta)
+			//		 =
+			let a0 = pi_ - phi + delta;
+			let r_delta = {
+				X: Math.cos(a0),	// just cos w/o scalar to keep norms for
+				Y: Math.sin(a0),	// nicer math; magni scaling at end
+				Z: 0, // Z always zero for NCP 
+						// -> Z of ray always 0 until revolve around NCP
+			};
+			
+			// now do Glenn rev around NCP
+			let _O = {X:0, Y:0, Z:0};	// origin; with dir vec (norm NCP) -> rev axis
+			let r_alpha = glennRevMaster(r_delta, _O, vects(uP), alpha - lam);
+			// alpha - lam to account for longitude not appearing on earth
+			// but still occuring relative to background stars
+			
+			// scale by magnitude
+			r_alpha.X *= r;
+			r_alpha.Y *= r;
+			r_alpha.Z *= r;
+			
+			r_alpha.r = r;		// add magnitude to output for rendering
+			
+			// get projection
+			if(includeProjection){
+				let [x, y] = [project2D(r_alpha.X, r_alpha.Z, r), project2D(r_alpha.Y, r_alpha.Z, r)];
+				let dProj = Math.sqrt(x**2 + y**2);
+				return {
+					X: r_alpha.X,
+					Y: r_alpha.Y,
+					Z: r_alpha.Z,
+					x: x,
+					y: y,
+					r: r,
+					dProj: dProj
+				};
+			}
+			
+			return r_alpha;
+		}
+		// naming stuff
+		const ncp3d = (...args) => NCP3D(...args);
+	</script>
+	<script id="js-draw-tools">
+		// canvas context 2d
+		// hack into ctx and add a 3D-proof line dash
+		CanvasRenderingContext2D.prototype.setLineDash3D = function(segments){
+			this.setLineDash(segments.map(n => n * (2 * R.r$)));
+		};
+		const ctx = cvs.getContext('2d');
+		const ctxCompass = cvsCompass.getContext('2d');
+		
+		// for drawing boldened overrides in 2D
+		function mapBoldSetup(x0, y0, x1, y1, thick = 2, originalColor = false){
+			let previousColor = ctx.strokeStyle;
+			ctx.lineWidth = thick * 1.25;
+			ctx.beginPath();
+			ctx.moveTo(x0, y0);
+			ctx.lineTo(x1, y1);
+			ctx.stroke();
+			ctx.closePath();
+			// override next line width
+			ctx.lineWidth = thick;
+			// do a second time to lighten the initial line
+			// uses originalColor defaulting to false but requiring a color for iteration to detect
+			// also allows the lightening to be overridden by defining originalColor on call
+			if(originalColor === false){
+				ctx.strokeStyle = "rgba(255, 255, 255, 0.45)";
+				mapBoldSetup(x0, y0, x1, y1, thick, previousColor);
+			}else{
+				ctx.strokeStyle = originalColor;
+			}
+		}
+		
+		// draw projected lines
+		function drawProjectedLine({x, y, r, dProj}, color = 'white', width = 1){
+			ctx.strokeStyle = color;
+			ctx.fillStyle = color;
+			ctx.lineWidth = width;
+			// scale segmented lines to total distance;
+			// w/o segments look like they revolve parallel
+			// to screen about origin
+			let segments = [...ctx.getLineDash()];
+			ctx.setLineDash(segments.map(n => n * dProj / (2 * r)));
+			
+			ctx.beginPath();
+			ctx.moveTo(0, 0);
+			ctx.lineTo(x, y);
+			ctx.stroke();
+			ctx.closePath();
+			ctx.setLineDash(segments);
+		}
+		// cap projected lines for distance
+		function drawProjectedLineDepthCap({x, y, r, Z, dProj}, color='white', width = 1, rCap = R.rCap){
+			ctx.strokeStyle = color;
+			ctx.fillStyle = color;
+			ctx.lineWidth = width;
+			
+			// get angle from (x, y)
+			let rot = Math.atan2(y, x);
+			// get value used for squishing ellipse (to give illusion of depth on sphere)
+			// let u = 1 / Math.sqrt(xf**2 + yf**2);
+			// ^ already have sqrt(x^2 + y^2) in dProj
+			let u = 1 / dProj;
+			u *= u == Infinity ? 0 : 1;		// to account for possible 1/0 in above
+			let s = 1.1 * R.r$ * u;				// R.r$ used bc depth depends on actual distance
+			s *= s;									// from the camera, and the entire thing is 
+			let squish = rCap - (rCap / s);	// contained within a cube of w = l = h = 2 * R.r$
+			squish *= squish <= 0 ? 0 : 1;	// (depth not dependent on magnitude r)
+			s = Math.sqrt(1 - ((1 - (squish / rCap)) ** 2));	// makes a bulge upward (see graph of sqrt(1-(1-x)^2))
+			ctx.setLineDash([]);
+			
+			// begin drawing
+			ctx.beginPath();
+			ctx.moveTo(x, y);
+			// Shrink on norm:
+			ctx.ellipse(x, y, squish, rCap, rot - pi, 0, pi2);
+			// Alt. - Grow on perp:
+			// ctx.ellipse(xi + xf, yi + yf, rCap, rCap + (rCap / s), rot - pi, 0, pi2);
+			
+			// order stroke/fill so that the cap fills 'outside' 
+			// -> can see axis shaft reach cap from below cap, but not above
+			let Z$ = -Z;
+			if(Z$ > 0){
+				// ctx.fillStyle = 'rgba(211,211,211, 0.7)';
+				ctx.stroke();
+				ctx.fill();
+			}else{
+				// ctx.fillStyle = 'rgba(30,30,30, 0.5)';
+				ctx.fill();
+				ctx.stroke();
+			}
+			// determine how to shade the cap (darker = farther back; lighter = closer forward)
+			let zshade = 0.5 * (1 - Z$ / R.r$);
+			let ashade = (0.2 * Math.cos(zshade * pi2)) + 0.5;
+			let rgbshade = 255*(zshade);
+			ctx.fillStyle = `rgba(${rgbshade},${rgbshade},${rgbshade},${ashade})`;
+			ctx.fill();
+			ctx.closePath();
+		}
+		
+		// compass thing (not actual compass since rel. to equator not NCP)
+		function updateCompass(){
+			let [w, h] = [cvsCompass.width, cvsCompass.height];
+			let [w_, h_] = [w * 0.5, h * 0.5];
+			// ^ set those to be in R and init later
+			let [C, S] = [0.9 * w_ * Math.cos(-R.longitude), 0.9 * h_ * Math.sin(-R.longitude)];
+			ctxCompass.clearRect(0,0,w,h);
+			ctxCompass.lineWidth = 1.5;
+			ctxCompass.strokeStyle = 'green';
+			ctxCompass.beginPath();
+			ctxCompass.moveTo(w_, h_);
+			ctxCompass.lineTo(w_ - S, h_ - C);
+			ctxCompass.closePath();
+			ctxCompass.stroke();
+			ctxCompass.strokeStyle = 'yellow';
+			ctxCompass.beginPath();
+			ctxCompass.moveTo(w_, h_);
+			ctxCompass.lineTo(w_ + S, h_ + C);
+			ctxCompass.closePath();
+			ctxCompass.stroke();
+			ctxCompass.strokeStyle = 'red';
+			ctxCompass.beginPath();
+			ctxCompass.moveTo(w_, h_);
+			ctxCompass.lineTo(w_ - C, h_ + S);
+			ctxCompass.closePath();
+			ctxCompass.stroke();
+			ctxCompass.strokeStyle = 'blue';
+			ctxCompass.beginPath();
+			ctxCompass.moveTo(w_, h_);
+			ctxCompass.lineTo(w_ + C, h_ - S);
+			ctxCompass.closePath();
+			ctxCompass.stroke();
+		};
+		
+		// test math ideas
+		function renderTestSet(resizeCanvas = false){
+			let alpha = 0.5 * pi_;
+			let delta = 0.5 * pi_;
+			
+			let lam = R.longitude;
+			let phi = R.latitude;
+			
+			// NCP in this screenspace
+			let _P = {
+				X: R.r$ * Math.cos(pi - phi),
+				Y: R.r$ * Math.sin(pi - phi),
+				Z: 0
+			};
+			// normalised NCP in this screenspace
+			let nP = {
+				X: Math.cos(pi - phi),
+				Y: Math.sin(pi - phi),
+				Z: 0
+			};
+			// perp to NCP
+			let _Q = {
+				X: _P.Y,		// bc perp to cos -> -sin
+				Y: -_P.X,
+				Z: 0
+			};
+			// normalised Q
+			let nQ = {
+				X: nP.Y,
+				Y: -nP.X,
+				Z: 0
+			};
+			// nP cross nQ
+			let nS = {
+				X: 0,
+				Y: 0,
+				Z: 1
+			};
+			// star (uses nQ as initial _R and nS as direction vector; all normalised until after revolution)
+			let uS;
+			// failed attempt at using GlennRev, but
+			// uS = glennRevMaster(nQ, {X:0,Y:0,Z:0}, vects(nS), delta);
+			// ...this way might be faster anyway
+			uS = {
+				X: Math.cos(pi_ - phi + delta),
+				Y: Math.sin(pi_ - phi + delta),
+				Z: 0
+			};
+			uS = glennRevMaster(uS, {X:0,Y:0,Z:0}, vects(nP), alpha - lam);
+			// console.table({"NCP": _P, "Q": _Q, "S": nS, "Star": uS});
+			uS.X *= R.r$;
+			uS.Y *= R.r$;
+			uS.Z *= R.r$;
+			// let [x, y] = projectVec2D(uS);
+			let [x, y] = [project2D(uS.X, uS.Z, R.r$), project2D(uS.Y, uS.Z, R.r$)];
+			
+			// clear and center the canvas and fix upside down y
+			if(resizeCanvas) ctx.clearRect(0, 0, 560, 560);
+			if(resizeCanvas) ctx.setTransform(1, 0, 0, -1, 0.5 * R.w, 0.5 * R.h);
+			
+			// outline circle
+			ctx.moveTo(0, 0);
+			ctx.strokeStyle = 'white';
+			ctx.beginPath();
+			ctx.arc(0, 0, R.r$, 0, pi2);
+			ctx.closePath();
+			ctx.stroke();
+			
+			// draw NCP
+			ctx.moveTo(0, 0);
+			ctx.strokeStyle = 'aqua';
+			ctx.beginPath();
+			ctx.moveTo(0, 0);
+			ctx.lineTo(_P.X, _P.Y);
+			ctx.closePath();
+			ctx.stroke();
+			// draw Q-hat
+			ctx.moveTo(0, 0);
+			ctx.strokeStyle = 'lime';
+			ctx.beginPath();
+			ctx.moveTo(0, 0);
+			ctx.lineTo(_Q.X, _Q.Y);
+			ctx.closePath();
+			ctx.stroke();
+			
+			// draw star
+			ctx.moveTo(0, 0);
+			ctx.strokeStyle = 'orange';
+			ctx.beginPath();
+			ctx.moveTo(0, 0);
+			ctx.lineTo(x, y);
+			ctx.closePath();
+			ctx.stroke();
+			
+			if(resizeCanvas) ctx.setTransform(1, 0, 0, 1, 0, 0);
+		}
+	</script>
+	<script id="js-star-setup">
+		// make each object uniquely colored
+		const rgbTrigData = {
+			r: {pi: 0},
+			g: {pi: (2/3) * pi},
+			b: {pi: (4/3) * pi},
+			min: 150,
+			max: 255,
+			get mod(){
+				return this.max - this.min;
+			},
+		};
+		function rgbByIndex(i){
+			let td = rgbTrigData;
+			let [rpi, gpi, bpi, min, max, mod] = [td.r.pi, td.g.pi, td.b.pi, td.min, td.max, td.mod];
+			let iPhase = (i / renderList.length) * pi2;
+			[rpi, gpi, bpi] = [clampAng(rpi + iPhase), clampAng(gpi + iPhase), clampAng(bpi + iPhase)];
+			let rgb = [mod * Math.sin(rpi) + min, mod * Math.sin(gpi) + min, mod * Math.sin(bpi) + min];
+			return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+		}
+		
+		// handle creating/updating/using star info
+		var renderList = [];
+		var starData = [];
+		var starLineData = [];
+		var star3D = [];
+		function addRenderObject(name, ra, dec){
+			pauseSystems();
+			renderList.push([convert(ra, 'from', 'hms'), convert(dec, 'from', 'damas'), 
+				{X:0,Y:0,Z:0,x:0,y:0,r:0,dProj:0},
+				// compile the depthBuffer data with other depthBuffer stuff
+				// for now a placeholder
+				"DEPTH_BUFFER_TAG_HERE"]);
+			// the last bit (index 2, the JSON) is for storing the star's 3D and projection data later on
+			// allows skipping computation when unnecessary or laggy
+			starData.push({name: name, ra: ra, dec: dec});
+			updateEntryList();
+			compileDepthBufferData();
+			resumeSystems('traces');
+		}
+		function updateEntryList(){
+			starList.innerHTML = "";
+			starData.forEach((l, i) => {
+				let color = rgbByIndex(i);
+				let star = document.createElement('p');
+				star.setAttribute('data-ui-type', 'star-entry');
+				star.setAttribute('data-index', String(i));
+				giveUIHoverBackground(star);
+				star.style.color = color;
+				star.innerHTML = "――― " + l.name;
+				star.title = 'δ: ' + convert([clampAng(renderList[i][1], [-1 * pi_, pi_])],'from','rad').toFixed(2) + 
+					'°\nα: ' + convert([clampAng(renderList[i][0], [-1 * pi, pi])],'from','rad').toFixed(2) + '°';
+				starList.appendChild(star);
+			});
+		}	
+		
+		// add renderList reset functionality (is const)
+		// not anymore but this simplifies a step still
+		renderList.cull = function(){
+			pauseSystems();
+			renderList = [];
+			starData = [];
+			starLineData = [];
+			star3D = [];
+			updateEntryList();
+			compileDepthBufferData();
+			resumeSystems('traces');
+		}
+	</script>
+	
+	<!-- main loop, initialisation, & rendering functions -->
+	<script id="js-main-control">
+		// if # is NaN or undefined, returns false; if # (even 0) returns true
+		// cant (typeof n) bc (typeof NaN) = number
+		const true0 = (...b) => !b.map(l => l == l++).includes(false);
+		
+		// orientation data
+		var R = {
+			// main values
+			// spheres
+			r_:  15,			// radius of 'earth' sphere
+			r_Scale: null,	// for scaling sphere quickly
+			r$: 300,			// radius of celestial sphere
+			r$Scale: null,	// for scaling sphere quickly
+			// canvas sizing stuff
+			w: 600,
+			h: 600,
+			// caps drawn for 3D lines
+			rCap: 8,						// radius of cap
+			rCapDepthScale: null,	// how to scale radius with travel down z-axis
+			// projection stuff
+			proj: {
+				ds: 8,	// d scalar
+				cs: 1,	// correction scalar
+			},
+			
+			NCP: {
+				X: -280,		// these are the initial
+				Y: 0,			// values of the NCP
+				Z: 0,			// (lying flat on -x axis)
+				get a(){return pi - R.latitude;},
+				set a(n){return (R.latitude = pi - n);},
+				// unitVector; use caching to prevent unnecessary trig calls
+				get u(){return this.still ? this._ucache : this._ucache._update();},
+				set u(n){},
+				_update: function(){
+					this.X = Math.cos(this.a) * R.r$;
+					this.Y = Math.sin(this.a) * R.r$;
+					this.Z = 0;
+					// also update equator
+					eqBL[0] = [NCP3D(0,    0, R.r$), 'blue'];
+					eqBL[1] = [NCP3D(pi_,  0, R.r$), 'green'];
+					eqBL[2] = [NCP3D(pi,   0, R.r$), 'red'];
+					eqBL[3] = [NCP3D(-pi_, 0, R.r$), 'yellow'];
+				},
+				_ucache: {
+					a: NaN,		// NaN to signifiy val
+					X: NaN,		// not been cached yet
+					Y: NaN,		
+					Z: 0,			// always 0 with new definition of orientations
+					_update: function(){
+						let [X$, Y$] = [Math.cos(R.NCP.a), Math.sin(R.NCP.a)];
+						let a$ = R.NCP.a;
+						R.NCP._ucache.X = X$;
+						R.NCP._ucache.Y = Y$;
+						R.NCP._ucache.a = a$;
+						R.NCP._ucache.Z = 0;
+						return {X: X$, Y: Y$, Z: 0, a: a$};
+					},
+				},
+				get still(){return this.a == this._ucache.a;},
+				set still(n){},
+			},
+			
+			// did store the x y vals for the middle of the screen
+			// before introducing the cvs transform,
+			// now just 0.5 * w and 0.5 * h
+			get x(){
+				if(true0(this._cache.halfw)) return this._cache.halfw;
+				// normally ^ would be false if x = halfw = 0,
+				// but w will never be 0 -> x = halfw != 0
+				this._cache.halfw = 0.5 * this.w;
+				return this._cache.halfw;
+			},
+			set x(n){
+				this._cache.halfw = NaN;
+				// ^ force cache to update on next call
+				return this.w = 2 * n;
+			},
+			get y(){
+				if(true0(this._cache.halfh)) return this._cache.halfh;
+				// explained in x getter
+				this._cache.halfh = 0.5 * this.h;
+				return this._cache.halfh;
+			},
+			set y(n){
+				this._cache.halfy = NaN;
+				return this.h = 2 * n;
+			},
+			
+			get latitude(){
+				let working = this._actual.latitude;
+				// working += this._config.zenithAlwaysVertical * pi_;	// zenithAlwaysVert is a boolean
+				return clampAng(working);
+			},
+			set latitude(n){
+				return this._actual.latitude = n;
+			},
+			get longitude(){
+				let working = this._actual.longitude;
+				return clampAng(working);
+			},
+			set longitude(n){
+				return this._actual.longitude = n;
+			},
+			
+			// likely not going to be used again
+			get trig(){
+				T = clampAng(this.latitude - pi_);
+				let C, S;
+				[C, S] = [Math.cos(T), Math.sin(T)];
+				return {theta: T, cos: C, sin: S};
+			},
+			set trig(n){
+				
+			},
+			
+			// vals known to change regularly to be accessed as
+			// vars but that still may need to behave as a fn
+			_actual: {
+				horizon: 0,
+				latitude: 0,
+			},
+			// vals that infrequently change or that are found
+			// in rel. to some other var to be computed only 
+			// when needed (i.e. after an update)
+			// typically an un-cached value to be cached on call
+			// will be NaN so true0 fn can check if needs update
+			_cache: {
+				halfw: NaN,		// could use getter -> 0.5 * w,
+				halfh: NaN,		// but i want to save calcs
+			},
+			_config: {
+				_implications: { /* what to do on config change */ },
+				_edit: (name, value, impli = null) => {	// create or edit a config
+					R._config[name] = value;
+					if(true0(impli)) R._config._implications[name] = impli;
+					(R._config._implications[name] ?? ((B) => null))(value);
+				},
+				_init: () => {		// default config settings
+					let e = R._config._edit;
+					// should the scaling be done to celestial sphere or traces?
+					e('scaleCelestialSphere', false, (B) => {
+						[R.r_Scale, R.r$Scale] = B ? [R.r_ / R.proj.cs, R.r$ / R.proj.cs] : [R.r_, R.r$];
+					});
+				},
+				zenithAlwaysVertical: true,	// i dont remember what these do
+				correctVertical: true,			// but oh well
+			},
+			cfgTap: function(name, value = null){
+				return (value !== null && value !== undefined) ? R._config._edit(name, value) : R._config[name];
+			},
+			cfgTog: name => R._config._edit(name, !R.cfg(name)),
+			cfg: function(str){	// template literal
+				return R._config[str];
+			},
+		};
+		
+		var debug_current_star = 0;
+		
+		// draw earth, horizon, etc.
+		const earthGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, R.r$);
+		earthGradient.addColorStop(0, 'rgba(211,211,211, 0.5)');
+		earthGradient.addColorStop(1, 'rgba(211,211,211, 0.2)');
+		function drawEarth(gradient = true){
+			// not really spheres that it draws, 
+			// 	but without shading its not like thats noticable
+			// also draws celestial sphere
+			// 	just bundled in for convenience
+			let r$ = R._config.scaleCelestialSphere ? R.r$ / R.proj.cs : R.r$;
+			let r_ = R._config.scaleCelestialSphere ? R.r_ / R.proj.cs : R.r_;
+			ctx.lineWidth = 2;
+			// celestial sphere
+			ctx.strokeStyle = 'lightgrey';
+			ctx.fillStyle = 'rgba(128,128,128, 0.5)';	
+			// grey (named color)-> 128, 128, 128
+			ctx.moveTo(0, 0);
+			ctx.beginPath();
+			ctx.arc(0, 0, r$, 0, pi2);
+			ctx.closePath();
+			ctx.stroke();
+			ctx.fill();
+			// earth
+			ctx.strokeStyle = 'white';
+			// ctx.fillStyle = 'rgba(211,211,211, 0.5)';
+			ctx.fillStyle = gradient ? earthGradient : 'rgba(211,211,211, 0.5)';
+			// lightgrey -> 211, 211, 211
+			ctx.moveTo(0, 0);
+			ctx.beginPath();
+			ctx.arc(0, 0, r_, 0, pi2);
+			ctx.closePath();
+			ctx.stroke();
+			ctx.fill();
+		}
+		function drawZenith(){
+			ctx.setLineDash([1, 2, 4]);
+			ctx.lineWidth = 1.5;
+			ctx.strokeStyle = 'chartreuse';
+			if(legendBoldLines.zenith){
+				if(legendBoldOverride === false){
+					legendBoldOverride = drawZenith;
+					return;	// to avoid drawing twice
+				}
+				mapBoldSetup(0, 0, 0, R.y, 2);
+			}
+			
+			ctx.beginPath();
+			ctx.moveTo(0, 0);
+			ctx.lineTo(0, R.y);
+			ctx.stroke();
+			ctx.closePath();
+		}
+		function drawHorizon(){
+			ctx.setLineDash([1, 2, 4]);
+			ctx.lineWidth = 1.5;
+			ctx.strokeStyle = 'lightgreen';
+			if(legendBoldLines.horizon){
+				if(legendBoldOverride === false){
+					legendBoldOverride = drawHorizon;
+					return;
+				}
+				mapBoldSetup(-R.x, 0, R.x, 0, 2);
+			}
+			ctx.beginPath();
+			ctx.moveTo(-R.x, 0);
+			ctx.lineTo(R.x, 0);
+			ctx.stroke();
+			ctx.closePath();
+		}
+		function drawNCP(){
+			// update NCP
+			if(!R.NCP.still){
+				R.NCP._update();
+				R.NCP._ucache._update();
+			}
+			let [x, y] = [R.NCP.X, R.NCP.Y];
+			
+			ctx.strokeStyle = 'aqua';
+			// draw NCP
+			ctx.setLineDash([1, 2, 4]);
+			ctx.lineWidth = 1.5;
+			// NCP boldening
+			if(legendBoldLines.pole){
+				if(legendBoldOverride === false){
+					legendBoldOverride = drawNCP;
+					return;
+				}
+				mapBoldSetup(0, 0, x, y, 2);
+			}
+			ctx.beginPath();
+			ctx.moveTo(0, 0);
+			ctx.lineTo(x, y);
+			ctx.stroke();
+			ctx.closePath();
+			
+			// draw SCP
+			ctx.setLineDash([1, 10]);
+			ctx.lineWidth = 1;
+			// SCP boldening
+			if(legendBoldLines.pole) mapBoldSetup(0, 0, -x, -y, 2);
+			ctx.beginPath();
+			ctx.moveTo(0, 0);
+			ctx.lineTo(-x, -y);
+			ctx.stroke();
+			ctx.closePath();
+		}
+		var eqBL = [ /* fill later, once everything set up */ ];
+		function drawEquator(){
+			// there are four lines used to represent the equator plane
+			// each one is 0.5pi rot. from prev
+			/* let planeGuides = [];
+			planeGuides.push([NCP3D(0,    0, R.r$), 'blue']);
+			planeGuides.push([NCP3D(pi_,  0, R.r$), 'green']);
+			planeGuides.push([NCP3D(pi,   0, R.r$), 'red']);
+			planeGuides.push([NCP3D(-pi_, 0, R.r$), 'yellow']); */
+			let planeGuides = Array.from(eqBL);
+			
+			// sort them by Z for boldening
+			planeGuides.sort((g0, g1) => g0[0].Z - g1[0].Z);
+			
+			eqBL = planeGuides;
+			
+			// draw
+			for(let i in planeGuides){
+				drawEquatorBranch(planeGuides[i][0], planeGuides[i][1]);
+				/* let g = planeGuides[i][0];
+				ctx.strokeStyle = planeGuides[i][1];
+				ctx.lineWidth = 1.5;
+				ctx.setLineDash([1, 2, 4]);
+				if(legendBoldLines.equator){
+					if(legendBoldOverride === false){
+						legendBoldOverride = drawEquator;
+						return;
+					}
+					mapBoldSetup(0, 0, g.x, g.y, 2);
+				}
+				
+				drawProjectedLine(g, planeGuides[i][1], ctx.lineWidth)
+				drawProjectedLineDepthCap(g, planeGuides[i][1], ctx.lineWidth); */
+			}
+		}
+		// for use with depthBuffer
+		function drawEquatorBranch(branch, color){
+			let g = branch;
+			ctx.strokeStyle = color;
+			ctx.lineWidth = 1.5;
+			ctx.setLineDash([1, 2, 4]);
+			if(legendBoldLines.equator){
+				if(legendBoldOverride === false){
+					legendBoldOverride = drawEquator;
+					return;
+				}
+				mapBoldSetup(0, 0, g.x, g.y, 2);
+			}
+			
+			drawProjectedLine(g, color, ctx.lineWidth)
+			drawProjectedLineDepthCap(g, color, ctx.lineWidth);
+		}
+		
+		// render a star entry in 3D
+		function renderStarEntry3D(l, i, r = R.r$, width = 1){
+			let color = rgbByIndex(i);
+			let outBoldStar = 0;
+			if(starLineData[i]) outBoldStar = i + 1;
+			alpha = renderList[i][0];
+			delta = renderList[i][1];
+			
+			// can have conditional to check if anything is moving here
+			// would allow skipping a new calc of s and could use stored
+			// numbers instead
+			let s = NCP3D(alpha, delta);
+			renderList[i][2] = s;
+			
+			drawProjectedLine(s, color, width)
+			drawProjectedLineDepthCap(s, color, width);
+			
+			return outBoldStar;
+		}
+		// render the boldened star
+		function renderStarBold3D(width = 2){
+			let i = boldStar - 1;	// - 1 to offset it being i + 1 (to avoid 0 == false)
+			let l = renderList[i];
+			let color = rgbByIndex(i);
+			
+			let s = renderList[i][2];
+			
+			ctx.setLineDash([1, 4]);
+			drawProjectedLine({x: s.x * 10, y: s.y * 10, r: s.r * 10, dProj: s.dProj * 10}, color, width);
+			ctx.setLineDash([]);
+			
+			ctx.strokeStyle = color;
+			mapBoldSetup(0, 0, s.x, s.y, width, "rgba(255, 255, 255, 0.73)");
+			mapBoldSetup(0, 0, s.x, s.y, width, color);
+			// colors given in fn here ^ to make fn think its on the shading iteration
+			// star lines dont look good using the default shading,
+			// so ive got the fn running twice (1st for color, 2nd for better shade)
+			// on a shade-skipping mode before drawing the line
+			drawProjectedLine(s, color, width)
+			renderStarEntry3D(l, i, s.r, width);
+		}
+		// render stars
+		var boldStar = 0;
+		function renderFromList(r = R.r$){
+			// boldStar = 0;		// this role was moved to the render fn to have better compatability
+										// with depthBuffer's rearranging of things
+			renderList.forEach((l, i) => {boldStar |= renderStarEntry3D(l, i, r, 1);});
+		}
+		
+		// getting things drawn in right order by depth
+		// everything is a straight line coming from the same point,
+		// so can cheat some and just use Z of endpoint as a val 
+		// to sort lines by
+		var depthBuffer = [];
+		function buildDepthBufferTag(r, fnCalls, fnArgs){
+			// builds a tag which can be kept in the renderList &c for a renderable line
+			// so that the first index of the output gets replaced by the position vector
+			// each frame but the system doesnt have to rebuild the tag
+			// the changed position vector is used to sort by depth,
+			// then depthBuffer is iterated
+			/*
+				r = JSON with X, Y, Z, x, y, r, dProj
+				fnCalls = array of fns to call (in order)
+				fnArgs = array of arguments arrays for fn in fnCalls
+			*/
+			// convert fnCalls to a fn to be run on iteration
+			let ONE_TO_ONE = true;
+			let ONLY_FIRST = false;
+			let argSpread = fnCalls.length == fnArgs.length ? ONE_TO_ONE : ONLY_FIRST;
+			// use generator to sift through them
+			let tag = [r, [fnCalls, fnArgs, argSpread]];
+			return tag;
+		}
+		function depthSorter(tag0, tag1){
+			return tag0[0].Z - tag1[0].Z;
+		}
+		function doDepthBuffer(){
+			depthBuffer.sort(depthSorter);
+			for(let i = 0; i < depthBuffer.length; i ++){
+				// console.log(depthBuffer);
+				let fnarr = depthBuffer[i][1][0];
+				let argar = depthBuffer[i][1][1];
+				let arspd = depthBuffer[i][1][2];
+				for(let j = 0; j < fnarr.length; j ++){
+					// console.log(fnarr, fnarr[j], argar, arspd, argar[j * arspd]);
+					fnarr[j](...(argar[j * arspd] ?? [null]));
+				}
+			}
+		}
+		/* general working format
+		depthBuffer.push(buildDepthBufferTag({Z:1}, [a => console.log(2 * a)], [3]))
+		depthBuffer.push(buildDepthBufferTag({Z:150}, [a => console.log(a ** 2)], [4]))
+		depthBuffer.push(buildDepthBufferTag({Z:-220}, [a => console.log(a - 5)], [10]))
+		siftDepthBuffer()
+		*/
+		/* need special fn variants per draw for depth buffer-
+			earth, zenith, NCP, horizon should stay at Z = 0 but all else will change
+			boldened stars are now entirely handled by render after all other drawing is done,
+			so dont need to worry about them here */
+		// declare variables to hold buffer tags
+		var depthBufferEarth;
+		var depthBufferZenith;
+		var depthBufferHorizon;
+		var depthBufferNCP;
+		var depthBufferEquator;
+		// actually set the buffer tags
+		function compileDepthBufferData(){
+			// depthBufferEarth = buildDepthBufferTag({Z:0}, [drawEarth], [[null]]);
+			// ^ earth & celestial sphere are a background anyway
+			depthBufferZenith = buildDepthBufferTag({X:0,Y:0,Z:0,x:0,y:0,r:R.r$}, [a => {drawZenith(a)}], [[]]);
+			depthBufferHorizon = buildDepthBufferTag({X:0,Y:0,Z:0,x:0,y:0,r:R.r$}, [a => {drawHorizon(a)}], [[]]);
+			depthBufferNCP = buildDepthBufferTag({X:0,Y:0,Z:0,x:0,y:0,r:R.r$}, [a => {drawNCP(a)}], [[]]);
+			// eqBL needs to be updated before this; thats in R.NCP._update, which is called in init
+			depthBufferEquator = [
+				buildDepthBufferTag(eqBL[0][0], [(a, b) => {drawEquatorBranch(a, b)}], [[eqBL[0][0], eqBL[0][1]]]),
+				buildDepthBufferTag(eqBL[1][0], [(a, b) => {drawEquatorBranch(a, b)}], [[eqBL[1][0], eqBL[1][1]]]),
+				buildDepthBufferTag(eqBL[2][0], [(a, b) => {drawEquatorBranch(a, b)}], [[eqBL[2][0], eqBL[2][1]]]),
+				buildDepthBufferTag(eqBL[3][0], [(a, b) => {drawEquatorBranch(a, b)}], [[eqBL[3][0], eqBL[3][1]]]),
+			];
+			compileStarDepthBufferTags();
+		};
+		// compile star buffer tags (not available when star init)
+		function compileStarDepthBufferTags(){
+			renderList.forEach((l, i) => {
+				let r = renderList[i][2];
+				renderList[i][3] = buildDepthBufferTag(r, [function(l, i, r, w){
+					ctx.setLineDash([])
+					ctx.lineWidth = 1;
+					boldStar |= renderStarEntry3D(l, i, r, w);
+				}], [[l, i, R.r$, 1]]);
+				// console.log(renderList[i][3]);
+			});
+		}
+		// update the r part of the tag and reset depthBuffer for sorting
+		function processDepthBuffer(){
+			// empty list
+			depthBuffer = [];
+			// update vectors
+			// renderList.forEach((l, j) => renderList[j][3][0] = renderList[j][2]);
+			renderList.forEach((l, j) => renderList[j][3][0] = renderList[j][2]);
+			depthBufferEquator.forEach((l, j) => {
+				depthBufferEquator[j][0] = eqBL[j][0];
+				depthBufferEquator[j][1][1][0][0] = eqBL[j][0];
+				depthBufferEquator[j][1][1][0][1] = eqBL[j][1];
+			});
+			// return to list
+			// depthBuffer.push(depthBufferEarth);
+			depthBuffer.push(depthBufferZenith);
+			depthBuffer.push(depthBufferHorizon);
+			depthBuffer.push(depthBufferNCP);
+			depthBufferEquator.forEach((l, i) => depthBuffer.push(l));
+			renderList.forEach((l, i) => depthBuffer.push(l[3]));
+			
+			// sort and render
+			doDepthBuffer();
+			ctx.setLineDash([]);
+		}
+		
+		// render loop variables
+		var renderOp;
+		var legendBoldOverride = false;		// used for getting bold legend lines drawn in proper order
+		var frameNumber = 0;
+		
+		// actual render loop
+		function render(){
+			// reset and center the canvas and fix upside down y
+			ctx.clearRect(-R.x, -R.y, R.w, R.h);
+			ctx.strokeStyle = 'black';
+			ctx.fillStyle = 'black';
+			ctx.lineWidth = 1;
+			ctx.setLineDash([]);
+			
+			// reset legend and star boldener override
+			legendBoldOverride = false;
+			boldStar = 0;
+			
+			// update latitude and longitude
+			if(isChangingLatitude) updateLatitudeAngle();
+			if(isChangingLongitude) updateLongitudeAngle();
+			
+			// draw stuff
+			drawEarth();		// earth and celestial "sphere"
+			R.NCP._update();
+			/* pre-depth buffer
+			drawZenith();		// zenith
+			drawHorizon();		// horizon
+			drawNCP();			// celestial poles
+			drawEquator(); 	// equator (4 vectors instead of plane)
+			
+			ctx.setLineDash([])
+			ctx.lineWidth = 1;
+			renderFromList(R.r$);
+			*/
+			processDepthBuffer();
+			
+			// run boldened legend lines after everything else
+			if(legendBoldOverride) legendBoldOverride();
+			if(boldStar) renderStarBold3D(2);
+			frameNumber++;
+			
+			// misc stuff
+			updateCompass();
+			
+			renderOp = window.requestAnimationFrame(render);
+		}
+		
+		// end rendering for dev testing
+		function kill(){window.cancelAnimationFrame(renderOp)}
+		function pauseSystems(){
+			if(frameNumber <= 0){ return; }
+			kill();
+			console.log('FRAME ' + frameNumber + ':: Pausing computations. Program should resume shortly.');
+			// also have a thing for storing any arguments passed to render here
+		}
+		function resumeSystems(...refreshes){
+			if(frameNumber <= 0){ return; }
+			if(refreshes.includes('render')){
+				updateEntryList();
+				compileDepthBufferData();
+			}
+			console.log('FRAME ' + frameNumber + ':: Computation resumed.')
+			window.requestAnimationFrame(render);
+		}
+		
+		const D$ic = DEFAULT$initConfig = {
+			wScreen: 600,
+			hScreen: 600,
+			rCelest: 300,
+			rEarth: 	 15,
+			rCap: 	  8,
+			antialias: true,
+		};
+		const sky = {
+			// yes i know its stupid to use .'#' instead of just an array
+			// np++ doesnt minimise arrays in html though and these are big
+			// it also looks nice with all the : lined up
+			_import: function(stars){
+				stars.forEach(S => addRenderObject(...S));
+			},
+			_trace: {
+				'0': ["Alkaid", [13,48,0],[49,19,0]],
+				'1': ["Mizar",  [13,24,0],[54,56,0]],
+				'2': ["Alioth", [12,54,0],[55,58,0]],
+				'3': ["Megrez", [12,15,0],[57,02,0]],
+				'4': ["Phecda", [11,54,0],[53,42,0]],
+				'5': ["Merak",  [11, 2,0],[56,23,0]],
+				'6': ["Dubhe",  [11, 4,0],[61,45,0]],
+			},
+			_clump: {								// unnamed clump
+				'0': [0, 1, 2, 3, 4, 5, 6],	// #s in arr are #ical IDs to _trace
+			},
+			_traceN: {			// named trace; links to a #ical _trace ID
+				"ALKAID":	0,
+				"MIZAR":		1,
+				"ALIOTH":	2,
+				"MEGREZ":	3,
+				"PHECDA":	4,
+				"MERAK":		5,
+				"DUBHE":		6,
+			},
+			_clumpN: {					// named clump
+				"BIG_DIPPER": [0],	// arr can reference many #ical _clump IDs (for constellations)
+			},
+			// template literal bullshittery to get traces from an excessive entry
+			$ref: function(datastring, spec = [','] /* to split into diff. types */){
+				// called as sky.$ref`trace 0, trace 1, trace 2, clump 0`; the , are breakSeq
+				// technically can also group types in ^ (`trace 0 1 2, clump 0` also works)
+				// can also call as sky.$ref([`${TYPE}`, `${NAME}`]) to get around all stuff in normal ` being read as spec
+				let breakSeq = spec[spec.length - 1];
+				ptrTypes = datastring.join(breakSeq).split(breakSeq);
+				var out_sky$ref = [];
+				for(let i in ptrTypes){
+					let ptr = ptrTypes[i].split(' ');
+					void (ptr[0] == '' && ptr.shift());	// ptr[0] != '' -> no shift; hacks past if
+					let type = ptr.shift();		// cut type from header 
+					for(let j in ptr){
+						// access the stored trace/clump
+						let id = ptr[j];
+						let named = !true0(+id);	// true0 -> 0 if str and 1 if num
+						let store = '_' + type;
+						let bank = sky[store];
+						
+						let C = (named << 1) + (type == 'clump');		// 0~3; +1 if clump, +2 if named
+						switch(C){
+							case 0b00:		// unnamed trace
+								out_sky$ref.push(sky['_trace'][id]);
+								break;
+							case 0b01:		// unnamed clump
+								for(let k in sky['_clump'][id]){
+									out_sky$ref.push(sky['_trace'][sky['_clump'][id][k]]);
+								}
+								break;
+							case 0b10:		// named trace
+								out_sky$ref.push(sky['_trace'][sky['_traceN'][id]]);
+								break;
+							case 0b11:		// named clump
+								for(let l in sky['_clumpN'][id]){
+									let nomNum = sky['_clump'][sky['_clumpN'][id][l]];
+									nomNum.forEach(k => out_sky$ref.push(sky['_trace'][nomNum[k]]));
+								}
+								break;
+						}
+						// console.log(type, named, C, id, store, bank);
+					}
+				}
+				// console.log(out_sky$ref);
+				return out_sky$ref;
+			},
+		}
+		function autoPopStars(stars = 'clump BIG_DIPPER'){
+			sky._import(sky.$ref([stars]));
+		}
+		
+		function restart(){
+			
+		}
+		// LAUNCH
+		function init({
+							wScreen: w = D$ic.wScreen, hScreen: h = D$ic.hScreen, 
+							rCelest: r$ = D$ic.rCelest, rEarth: r_ = D$ic.rEarth, rCap: rCap = D$ic.rCap,
+							antialias: aa = D$ic.antialias,
+		}){
+			// update R and canvas
+			R.r$ = r$;
+			R.r_ = r_;
+			R.w = w;
+			R.h = h;
+			R.rCap = rCap;
+			cvs.width = w;
+			cvs.height = h;
+			// initialise starting values
+			R._config._init();
+			userLatitudeAngle.value = convert(R._actual.latitude, 'from', 'radians');
+			userLongitudeAngle.value = convert(R._actual.longitude, 'from', 'radians');
+			updateLatitudeAngle();
+			updateLongitudeAngle();
+			R.NCP._update();
+			// fix projection scalar
+				// R.proj.cs = 0.98 * R.r$ / project2D(R.r$, 0, R.r$);
+				// 0.98 is arbitrary; full 1 seems to make lines too big somehow
+			R.proj.cs = project2D(R.r$, R.r$, R.r$) / project2D(R.r$, 0, R.r$);
+			// transform canvas to make it more pleasant to do crazy dimension stuff with
+			ctx.setTransform(1, 0, 0, -1, 0.5 * R.w, R.y);
+			ctx.imageSmoothingEnabled = aa;
+			
+			// add stars (star adder ui to be made)
+			// !! do here so they have time to compute before buffer tags are computed
+			sky._import(sky.$ref`clump BIG_DIPPER`);	// uses template literals because i was bored
+			
+			// prepare buffer tags
+			compileDepthBufferData();
+			
+			// organise ui-split-menus
+			deriveUISplitMenuPositions();
+			
+			// finish UI
+			armDevButtons();
+			
+			// start render loop
+			renderOp = window.requestAnimationFrame(render);
+		}
+		window.addEventListener('load', () => init({}));
+	</script>
+</body>
+</html>
