@@ -31,6 +31,6 @@ there is currently no way to remove stars other than the 'cull renderList' optio
 the stars present by default make up the Big Dipper.
 
 I have no idea whether the thing renders flipped or spins backwards or not. I've been unable to tune the sensitivity on the projection algorithm well,
-  but I've attempted to use shading (darker = farther; ligher = closer) to show which side of the sphere thing the stars are supposed to be on
+  but I've attempted to use shading (darker = farther; ligher = closer) to show which side of the sphere thing the stars are supposed to be on.
 
 why do newlines not work
